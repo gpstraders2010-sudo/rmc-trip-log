@@ -5,14 +5,22 @@ import { motion } from 'motion/react';
 
 const Login: React.FC = () => {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
     if (isAuthenticating) return;
     setIsAuthenticating(true);
+    setError(null);
     try {
-      await signInWithGoogle();
-    } catch (error) {
-      console.error('Login failed:', error);
+      const result = await signInWithGoogle();
+      if (!result) {
+        // This happens if the popup was closed or cancelled, which we handle silently in firebase.ts
+        // but we should probably tell the user something happened if they are stuck.
+        console.log('Login cancelled or popup closed.');
+      }
+    } catch (err: any) {
+      console.error('Login failed:', err);
+      setError(err.message || 'An unexpected error occurred during sign in.');
     } finally {
       setIsAuthenticating(false);
     }
@@ -39,6 +47,13 @@ const Login: React.FC = () => {
             <h1 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">RMC Fleet Log</h1>
             <p className="text-slate-400 text-sm font-medium tracking-wide">Secure Trip Management & Billing System</p>
           </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+              <p className="text-xs font-bold text-rose-400 uppercase tracking-widest mb-1 text-center">Login Error</p>
+              <p className="text-xs text-rose-300 text-center">{error}</p>
+            </div>
+          )}
 
           <div className="space-y-4 mb-8">
             <div className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-2xl border border-slate-700/50">
@@ -74,7 +89,12 @@ const Login: React.FC = () => {
             {isAuthenticating ? 'AUTHENTICATING...' : 'SIGN IN WITH GOOGLE'}
           </button>
 
-          <p className="mt-8 text-center text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+          <p className="mt-8 text-center text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-relaxed">
+            Trouble signing in? Try opening the app in a<br />
+            <span className="text-indigo-400">new tab</span> to bypass browser restrictions.
+          </p>
+
+          <p className="mt-4 text-center text-[10px] text-slate-500 font-bold uppercase tracking-widest">
             By signing in, you agree to our Terms of Service
           </p>
         </div>

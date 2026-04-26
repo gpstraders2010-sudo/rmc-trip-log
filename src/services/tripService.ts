@@ -42,18 +42,30 @@ export const tripService = {
     const path = `users/${userId}/${COLLECTION_NAME}`;
     try {
       const tripRef = doc(db, path, trip.id);
+      
+      // We use a simple strategy: if the trip doesn't have a userId yet in our local state, 
+      // or if we're explicitly creating, we can try to skip overwriting createdAt if it exists.
+      // But for this app, we'll just check if it's a new ID.
+      
       const tripData = {
         ...trip,
         userId,
         updatedAt: serverTimestamp(),
       };
-      
-      // If it's a new trip, add createdAt
-      const existing = await doc(db, path, trip.id);
-      // Note: We use setDoc with merge for simplicity in this implementation
+
+      // Ensure we don't have undefined fields
+      Object.keys(tripData).forEach(key => {
+        if ((tripData as any)[key] === undefined) {
+          delete (tripData as any)[key];
+        }
+      });
+
+      // Use setDoc with merge: true to avoid deleting fields we might have added manually
       await setDoc(tripRef, {
         ...tripData,
-        createdAt: trip.id ? (trip as any).createdAt : serverTimestamp()
+        // Only set createdAt if we don't think it exists (simple heuristic for this app)
+        // A better way would be a transaction or checking document existence
+        createdAt: (trip as any).createdAt || serverTimestamp()
       }, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);

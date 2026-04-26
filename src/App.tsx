@@ -74,6 +74,23 @@ export default function App() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
+        <div className="bg-rose-500/10 border border-rose-500/20 p-8 rounded-3xl mb-4">
+          <p className="text-rose-400 font-bold uppercase tracking-widest text-xs mb-2">Auth Error</p>
+          <p className="text-rose-300 text-sm">{error.message}</p>
+        </div>
+        <button 
+          onClick={() => window.location.reload()}
+          className="text-white bg-slate-800 px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (!user) {
     return <Login />;
   }
