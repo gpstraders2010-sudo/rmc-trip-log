@@ -1,40 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import { Trip } from './types';
-import { storage, cn } from './lib/utils';
+import { cn } from './lib/utils';
 import TripForm from './components/Trips/TripForm';
 import TripHistory from './components/History/TripHistory';
 import BillingReport from './components/Billing/BillingReport';
-import { Truck, History, FileStack, LayoutDashboard } from 'lucide-react';
+import Login from './components/Auth/Login';
+import { auth, logout } from './lib/firebase';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { tripService } from './services/tripService';
+import { Truck, History, FileStack, LayoutDashboard, LogOut, User as UserIcon, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 
 type Tab = 'entry' | 'history' | 'billing';
 
 export default function App() {
+  const [user, loading, error] = useAuthState(auth);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('entry');
   const [editingTrip, setEditingTrip] = useState<Trip | undefined>();
 
-  // Use localStorage on mount
+  // Use Firestore subscription
   useEffect(() => {
-    const loadedTrips = storage.getTrips();
-    setTrips(loadedTrips);
-  }, []);
-
-  const handleSaveTrip = (trip: Trip) => {
-    if (editingTrip) {
-      storage.updateTrip(trip);
-    } else {
-      storage.addTrip(trip);
+    if (!user) {
+      setTrips([]);
+      return;
     }
-    setTrips(storage.getTrips());
+
+    const unsubscribe = tripService.subscribeToTrips(user.uid, (loadedTrips) => {
+      setTrips(loadedTrips);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const handleSaveTrip = async (trip: Trip) => {
+    if (!user) return;
+    
+    await tripService.saveTrip(user.uid, {
+      ...trip,
+      userId: user.uid
+    });
     setEditingTrip(undefined);
   };
 
-  const handleDeleteTrip = (id: string) => {
+  const handleDeleteTrip = async (id: string) => {
+    if (!user) return;
     if (window.confirm('Are you sure you want to delete this trip log?')) {
-      storage.deleteTrip(id);
-      setTrips(storage.getTrips());
+      await tripService.deleteTrip(user.uid, id);
     }
   };
 
@@ -45,11 +58,25 @@ export default function App() {
 
   const handleExportData = () => {
     if (trips.length === 0) return;
-    const ws = XLSX.utils.json_to_sheet(trips);
+    const exportData = trips.map(({ id, userId, ...rest }) => rest);
+    const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "All Trips");
     XLSX.writeFile(wb, `RMC_Full_Log_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6">
+        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
+        <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Initializing Session...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
 
   const tabs = [
     { id: 'entry', label: 'Daily Logs', icon: Truck },
@@ -91,10 +118,32 @@ export default function App() {
           </nav>
         </div>
 
-        <div className="p-6 border-t border-slate-100">
-          <div className="bg-indigo-50/50 rounded-lg p-4 border border-indigo-100/50">
-            <p className="text-[10px] text-indigo-700 font-bold uppercase tracking-wider mb-1">Vendor Code</p>
-            <p className="text-sm font-bold text-indigo-900">UTS00486</p>
+        <div className="p-4 space-y-4">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center overflow-hidden">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon className="w-5 h-5 text-indigo-600" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900 truncate">{user.displayName || 'Anonymous'}</p>
+                <p className="text-[10px] text-slate-500 truncate font-medium">{user.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="w-full flex items-center justify-center gap-2 py-2 text-xs font-black text-rose-600 border border-rose-100 bg-rose-50 rounded-lg hover:bg-rose-100 transition-all cursor-pointer uppercase tracking-widest"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Logout
+            </button>
+          </div>
+
+          <div className="bg-indigo-600 rounded-xl p-4 shadow-lg shadow-indigo-100">
+            <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider mb-1 text-center">Vendor Code</p>
+            <p className="text-sm font-black text-white text-center">UTS00486</p>
           </div>
         </div>
       </aside>
@@ -108,7 +157,7 @@ export default function App() {
               {tabs.find(t => t.id === activeTab)?.label}
             </h2>
             <span className="hidden sm:inline-block px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-black rounded uppercase tracking-wider">
-              Active
+              System Live
             </span>
           </div>
 
@@ -155,7 +204,7 @@ export default function App() {
                           <Truck className="w-8 h-8 text-slate-300" />
                         </div>
                         <h3 className="text-slate-600 font-bold mb-2">Ready for Logging</h3>
-                        <p className="text-slate-400 text-sm max-w-xs">Enter your trip details on the left to add them to your daily log history.</p>
+                        <p className="text-slate-400 text-sm max-w-xs">Enter your trip details on the left to add them to your daily log history. Data is synced in real-time.</p>
                      </div>
                   </div>
                 </div>
@@ -194,8 +243,16 @@ export default function App() {
               <span className="text-[9px] font-bold uppercase tracking-tighter">{label}</span>
             </button>
           ))}
+          <button
+              onClick={logout}
+              className="flex flex-col items-center p-2 rounded-xl text-rose-500 transition-all cursor-pointer"
+            >
+              <LogOut className="w-5 h-5 mb-1" />
+              <span className="text-[9px] font-bold uppercase tracking-tighter">Exit</span>
+          </button>
         </nav>
       </div>
     </div>
   );
 }
+

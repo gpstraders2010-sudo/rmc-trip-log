@@ -9,6 +9,7 @@ export type Purpose = 'Mould Collection' | 'Expo' | 'Lorry Set' | 'Custom';
 
 export interface Trip {
   id: string;
+  userId?: string;
   date: string;
   plant: Plant;
   siteName: string;

@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "Trip": {
+      "title": "Trip",
+      "description": "Log of a single logistics trip",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique trip ID" },
+        "userId": { "type": "string", "description": "UID of the owner" },
+        "date": { "type": "string", "format": "date", "description": "Date of trip" },
+        "plant": { "type": "string", "enum": ["Plant 1", "Plant 2"], "description": "Origin plant" },
+        "siteName": { "type": "string", "description": "Destination site name" },
+        "location": { "type": "string", "description": "Specific location detail" },
+        "purpose": { "type": "string", "enum": ["Mould Collection", "Expo", "Lorry Set", "Custom"], "description": "Trip purpose" },
+        "customPurpose": { "type": "string", "description": "Specified custom purpose" },
+        "startingKM": { "type": "number", "description": "Odometer at start" },
+        "endingKM": { "type": "number", "description": "Odometer at end" },
+        "totalKM": { "type": "number", "description": "Calculated distance" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of update" }
+      },
+      "required": ["id", "userId", "date", "plant", "siteName", "startingKM", "endingKM", "totalKM"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/trips/{tripId}": {
+      "schema": "Trip",
+      "description": "User specific trip logs"
+    }
+  }
+}
