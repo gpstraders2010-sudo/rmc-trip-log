@@ -1,9 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { signInWithGoogle } from '../../lib/firebase';
-import { Truck, ShieldCheck, LogIn, Sparkles } from 'lucide-react';
+import { Truck, ShieldCheck, LogIn, Sparkles, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 const Login: React.FC = () => {
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const handleLogin = async () => {
+    if (isAuthenticating) return;
+    setIsAuthenticating(true);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      console.error('Login failed:', error);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       {/* Background Decor */}
@@ -48,11 +62,16 @@ const Login: React.FC = () => {
           </div>
 
           <button
-            onClick={signInWithGoogle}
-            className="w-full bg-white hover:bg-slate-50 text-slate-900 font-black py-4 px-6 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 cursor-pointer group"
+            onClick={handleLogin}
+            disabled={isAuthenticating}
+            className="w-full bg-white hover:bg-slate-50 disabled:bg-slate-800 disabled:text-slate-600 text-slate-900 font-black py-4 px-6 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 cursor-pointer group"
           >
-            <LogIn className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            SIGN IN WITH GOOGLE
+            {isAuthenticating ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <LogIn className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            )}
+            {isAuthenticating ? 'AUTHENTICATING...' : 'SIGN IN WITH GOOGLE'}
           </button>
 
           <p className="mt-8 text-center text-[10px] text-slate-500 font-bold uppercase tracking-widest">

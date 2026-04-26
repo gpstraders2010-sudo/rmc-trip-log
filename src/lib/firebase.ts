@@ -9,7 +9,20 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 export const googleProvider = new GoogleAuthProvider();
 
-export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
+export const signInWithGoogle = async () => {
+  try {
+    return await signInWithPopup(auth, googleProvider);
+  } catch (error: any) {
+    // Ignore internal popup cancellation errors to prevent app-level crashes
+    if (
+      error.code === 'auth/cancelled-popup-request' ||
+      error.code === 'auth/popup-closed-by-user'
+    ) {
+      return null;
+    }
+    throw error;
+  }
+};
 export const logout = () => signOut(auth);
 
 // Test Connection
