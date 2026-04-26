@@ -14,13 +14,23 @@ const Login: React.FC = () => {
     try {
       const result = await signInWithGoogle();
       if (!result) {
-        // This happens if the popup was closed or cancelled, which we handle silently in firebase.ts
-        // but we should probably tell the user something happened if they are stuck.
         console.log('Login cancelled or popup closed.');
       }
     } catch (err: any) {
       console.error('Login failed:', err);
-      setError(err.message || 'An unexpected error occurred during sign in.');
+      let friendlyMessage = err.message;
+      
+      const currentHost = window.location.hostname;
+
+      if (err.code === 'auth/unauthorized-domain') {
+        friendlyMessage = `The domain "${currentHost}" is not authorized in your Firebase Project. Please add it to "Authentication > Settings > Authorized Domains" in the Firebase Console.`;
+      } else if (err.message.includes('missing initial state')) {
+        friendlyMessage = 'Session error (Missing Initial State). This often happens in mobile apps or private browsing. Try using a standard browser or enable cookies.';
+      } else if (err.code === 'auth/popup-blocked') {
+        friendlyMessage = 'Login popup was blocked by your browser. Please allow popups for this site.';
+      }
+      
+      setError(friendlyMessage);
     } finally {
       setIsAuthenticating(false);
     }
