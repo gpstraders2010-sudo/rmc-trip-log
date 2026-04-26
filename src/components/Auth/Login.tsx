@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithGoogle } from '../../lib/firebase';
+import { signInWithGoogle, signInWithGoogleRedirect } from '../../lib/firebase';
 import { Truck, ShieldCheck, LogIn, Sparkles, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -32,6 +32,19 @@ const Login: React.FC = () => {
       
       setError(friendlyMessage);
     } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleDirectLogin = async () => {
+    if (isAuthenticating) return;
+    setIsAuthenticating(true);
+    setError(null);
+    try {
+      await signInWithGoogleRedirect();
+    } catch (err: any) {
+      console.error('Direct Login failed:', err);
+      setError(err.message);
       setIsAuthenticating(false);
     }
   };
@@ -89,7 +102,7 @@ const Login: React.FC = () => {
           <button
             onClick={handleLogin}
             disabled={isAuthenticating}
-            className="w-full bg-white hover:bg-slate-50 disabled:bg-slate-800 disabled:text-slate-600 text-slate-900 font-black py-4 px-6 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 cursor-pointer group"
+            className="w-full bg-white hover:bg-slate-50 disabled:bg-slate-800 disabled:text-slate-600 text-slate-900 font-black py-4 px-6 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 cursor-pointer group mb-3"
           >
             {isAuthenticating ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -97,6 +110,15 @@ const Login: React.FC = () => {
               <LogIn className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             )}
             {isAuthenticating ? 'AUTHENTICATING...' : 'SIGN IN WITH GOOGLE'}
+          </button>
+
+          <button
+            onClick={handleDirectLogin}
+            disabled={isAuthenticating}
+            className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:text-slate-600 text-slate-300 font-bold py-3 px-6 rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer text-xs uppercase tracking-widest"
+          >
+            {isAuthenticating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+            Direct Login (For APK/PWA)
           </button>
 
           <p className="mt-8 text-center text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-relaxed">

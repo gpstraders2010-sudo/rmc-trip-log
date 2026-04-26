@@ -3,6 +3,8 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signOut, 
   browserLocalPersistence, 
   setPersistence,
@@ -15,13 +17,13 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// Enable persistence explicitly for iframes and common web environments
+// Enable persistence explicitly. browserLocalPersistence is usually best for mobile/APKs.
 setPersistence(auth, browserLocalPersistence).catch(err => console.error('Persistence failed:', err));
 
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 export const googleProvider = new GoogleAuthProvider();
-// Force account selection to prevent "automatically choosing a logged in account" flickering which can sometimes fail in iframes
+// Force account selection to prevent "automatically choosing a logged in account" flickering
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export const signInWithGoogle = async () => {
@@ -38,6 +40,9 @@ export const signInWithGoogle = async () => {
     throw error;
   }
 };
+
+export const signInWithGoogleRedirect = () => signInWithRedirect(auth, googleProvider);
+export const handleRedirectResult = () => getRedirectResult(auth);
 export const logout = () => signOut(auth);
 
 // Test Connection

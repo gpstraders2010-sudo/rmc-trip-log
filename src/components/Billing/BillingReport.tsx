@@ -1,10 +1,10 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { Trip, Plant, VENDOR_DETAILS } from '../../types';
 import { cn } from '../../lib/utils';
-import { Download, FileText, Table as TableIcon, FileSpreadsheet } from 'lucide-react';
+import { Download, FileText, Table as TableIcon, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 interface BillingReportProps {
@@ -14,6 +14,7 @@ interface BillingReportProps {
 export default function BillingReport({ trips }: BillingReportProps) {
   const [selectedPlant, setSelectedPlant] = useState<Plant>('Plant 1');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [isGenerating, setIsGenerating] = useState(false);
   const billRef = useRef<HTMLDivElement>(null);
 
   const monthsList = useMemo(() => {
@@ -53,36 +54,126 @@ export default function BillingReport({ trips }: BillingReportProps) {
   }, [trips, selectedMonth]);
 
   const handleDownloadPDF = async () => {
-    if (!billRef.current) return;
-
     try {
-      const element = billRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      
+      setIsGenerating(true);
+      const doc = new jsPDF();
       const monthName = format(parseISO(`${selectedMonth}-01`), 'MMMM');
       const year = format(parseISO(`${selectedMonth}-01`), 'yyyy');
-      const fileName = `${selectedPlant.replace(' ', '')}_Bill_${monthName}_${year}.pdf`;
+
+      // 1. Header
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TRIP BILL', 14, 20);
       
-      pdf.save(fileName);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100);
+      doc.text('Monthly Logistics Statement', 14, 26);
+
+      // Business Info (Top Right)
+      doc.setFontSize(14);
+      doc.setTextColor(79, 70, 229); // Indigo
+      doc.text('RMC', 196, 20, { align: 'right' });
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text('System Generated Report', 196, 24, { align: 'right' });
+
+      doc.setDrawColor(200);
+      doc.line(14, 32, 196, 32);
+
+      // 2. Billing Info
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+      doc.text('BILLING MONTH', 14, 42);
+      doc.text('PLANT NAME', 70, 42);
+      doc.text('VENDOR CODE', 130, 42);
+      doc.text('P.O. NUMBER', 196, 42, { align: 'right' });
+
+      doc.setFontSize(11);
+      doc.setTextColor(30);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${monthName} ${year}`, 14, 48);
+      doc.text(selectedPlant, 70, 48);
+      doc.text(VENDOR_DETAILS.code, 130, 48);
+      doc.text(VENDOR_DETAILS.plants[selectedPlant].po, 196, 48, { align: 'right' });
+
+      // 3. Summary Stats
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.rect(14, 56, 182, 20, 'F');
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.rect(14, 56, 182, 20, 'S');
+
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.setFont('helvetica', 'black');
+      doc.text('TOTAL TRIPS', 60, 63, { align: 'center' });
+      doc.text('TOTAL KILOMETERS', 150, 63, { align: 'center' });
+
+      doc.setFontSize(14);
+      doc.setTextColor(30);
+      doc.setFont('helvetica', 'bold');
+      doc.text(totalTrips.toString(), 60, 71, { align: 'center' });
+      doc.setTextColor(79, 70, 229);
+      doc.text(`${totalKM.toFixed(1)} KM`, 150, 71, { align: 'center' });
+
+      // 4. Trip Table
+      autoTable(doc, {
+        startY: 85,
+        head: [['Date', 'Site Name', 'Location', 'Purpose', 'Start', 'End', 'Total KM']],
+        body: reportTrips.map(trip => [
+          format(parseISO(trip.date), 'dd/MM/yyyy'),
+          { content: trip.siteName, styles: { fontSize: 8, fontStyle: 'bold' } },
+          { content: trip.location || 'N/A', styles: { fontSize: 8 } },
+          trip.purpose === 'Custom' ? trip.customPurpose : trip.purpose,
+          trip.startingKM.toFixed(1),
+          trip.endingKM.toFixed(1),
+          { content: trip.totalKM.toFixed(1), styles: { fontStyle: 'bold' } }
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [15, 23, 42], textColor: 255, fontSize: 9, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 8, textColor: 50 },
+        columnStyles: {
+          0: { cellWidth: 22 },
+          1: { cellWidth: 'auto' },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 18, halign: 'right' },
+          5: { cellWidth: 18, halign: 'right' },
+          6: { cellWidth: 18, halign: 'right' },
+        },
+        foot: [['', '', '', '', '', 'Total KM', totalKM.toFixed(1)]],
+        footStyles: { fillColor: [79, 70, 229], textColor: 255, fontSize: 10, fontStyle: 'bold', halign: 'right' }
+      });
+
+      // 5. Signatures
+      const finalY = (doc as any).lastAutoTable.finalY + 30;
+      doc.setDrawColor(30);
+      doc.line(14, finalY, 64, finalY);
+      doc.line(80, finalY, 130, finalY);
+      doc.line(146, finalY, 196, finalY);
+
+      doc.setFontSize(8);
+      doc.setTextColor(100);
+      doc.text('Supplier Signature', 39, finalY + 5, { align: 'center' });
+      doc.text('Verifier Signature', 105, finalY + 5, { align: 'center' });
+      doc.text('Plant Head Signature', 171, finalY + 5, { align: 'center' });
+
+      // 6. Footer
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(200);
+        doc.text(`Generated on ${format(new Date(), 'dd MMM yyyy • HH:mm:ss')} • Page ${i} of ${pageCount}`, 14, 285);
+      }
+
+      const fileName = `${selectedPlant.replace(' ', '')}_Bill_${monthName}_${year}.pdf`;
+      doc.save(fileName);
     } catch (error) {
       console.error('PDF Generation failed:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -109,8 +200,7 @@ export default function BillingReport({ trips }: BillingReportProps) {
       { 'Metric': 'Billing Month', 'Value': `${monthName} ${year}` },
       { 'Metric': '', 'Value': '' },
       { 'Metric': 'Total Trips', 'Value': totalTrips },
-      { 'Metric': 'Total Kilometers', 'Value': totalKM.toFixed(1) },
-      { 'Metric': 'Average KM per Trip', 'Value': avgKM }
+      { 'Metric': 'Total Kilometers', 'Value': totalKM.toFixed(1) }
     ];
 
     // 3. Create Workbook and Sheets
@@ -212,10 +302,15 @@ export default function BillingReport({ trips }: BillingReportProps) {
           <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleDownloadPDF}
-              disabled={reportTrips.length === 0}
+              disabled={reportTrips.length === 0 || isGenerating}
               className="flex-1 bg-slate-900 hover:bg-black disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-bold text-[10px] py-3 px-6 rounded-lg shadow-xl shadow-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer uppercase tracking-widest"
             >
-              <Download className="w-4 h-4" /> Export PDF
+              {isGenerating ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {isGenerating ? 'Generating...' : 'Export PDF'}
             </button>
             <button
               onClick={handleDownloadExcel}
@@ -281,7 +376,7 @@ export default function BillingReport({ trips }: BillingReportProps) {
               </div>
 
               {/* Summary Section */}
-              <div className="mb-10 bg-slate-50 border border-slate-200 p-6 rounded-lg grid grid-cols-3 divide-x divide-slate-200">
+              <div className="mb-10 bg-slate-50 border border-slate-200 p-6 rounded-lg grid grid-cols-2 divide-x divide-slate-200">
                  <div className="px-4 text-center">
                     <p className="text-[10px] uppercase font-black text-slate-400 mb-1 tracking-widest">Total Trips</p>
                     <p className="text-2xl font-black text-slate-900">{totalTrips}</p>
@@ -289,10 +384,6 @@ export default function BillingReport({ trips }: BillingReportProps) {
                  <div className="px-4 text-center">
                     <p className="text-[10px] uppercase font-black text-slate-400 mb-1 tracking-widest">Total Kilometers</p>
                     <p className="text-2xl font-black text-indigo-600">{totalKM.toFixed(1)} <span className="text-xs">KM</span></p>
-                 </div>
-                 <div className="px-4 text-center">
-                    <p className="text-[10px] uppercase font-black text-slate-400 mb-1 tracking-widest">Average / Trip</p>
-                    <p className="text-2xl font-black text-slate-900">{avgKM} <span className="text-xs">KM</span></p>
                  </div>
               </div>
 
@@ -303,7 +394,8 @@ export default function BillingReport({ trips }: BillingReportProps) {
                   <thead>
                     <tr className="bg-slate-900 uppercase text-[9px] font-black text-white text-center">
                       <th className="px-3 py-3 border border-slate-900">Date</th>
-                      <th className="px-3 py-3 border border-slate-900 text-left">Site Execution Detail</th>
+                      <th className="px-3 py-3 border border-slate-900 text-left">Site Name</th>
+                      <th className="px-3 py-3 border border-slate-900 text-left">Location</th>
                       <th className="px-3 py-3 border border-slate-900">Purpose</th>
                       <th className="px-3 py-3 border border-slate-900 text-right">Start</th>
                       <th className="px-3 py-3 border border-slate-900 text-right">End</th>
@@ -314,9 +406,11 @@ export default function BillingReport({ trips }: BillingReportProps) {
                     {reportTrips.map((trip) => (
                       <tr key={trip.id} className="text-[10px] text-center border-b border-slate-200">
                         <td className="px-3 py-3 font-medium">{format(parseISO(trip.date), 'dd/MM/yyyy')}</td>
-                        <td className="px-3 py-3 text-left">
-                           <p className="font-bold text-slate-800">{trip.siteName}</p>
-                           <p className="text-[9px] text-slate-400 uppercase">{trip.location || 'N/A'}</p>
+                        <td className="px-3 py-3 text-left font-bold text-slate-800">
+                          {trip.siteName}
+                        </td>
+                        <td className="px-3 py-3 text-left text-slate-400 uppercase font-bold text-[9px]">
+                          {trip.location || 'N/A'}
                         </td>
                         <td className="px-3 py-3 font-bold text-slate-700">
                           {trip.purpose === 'Custom' ? trip.customPurpose : trip.purpose}
@@ -329,7 +423,7 @@ export default function BillingReport({ trips }: BillingReportProps) {
                   </tbody>
                   <tfoot>
                     <tr className="bg-slate-100 font-black text-right border-t-2 border-slate-900">
-                      <td colSpan={5} className="px-3 py-4 uppercase tracking-tighter text-slate-500 text-[11px]">Monthly Total Kilometers</td>
+                      <td colSpan={6} className="px-3 py-4 uppercase tracking-tighter text-slate-500 text-[11px]">Monthly Total Kilometers</td>
                       <td className="px-3 py-4 text-center bg-indigo-600 text-white text-lg tracking-tighter">{totalKM.toFixed(1)}</td>
                     </tr>
                   </tfoot>

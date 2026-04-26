@@ -5,7 +5,7 @@ import TripForm from './components/Trips/TripForm';
 import TripHistory from './components/History/TripHistory';
 import BillingReport from './components/Billing/BillingReport';
 import Login from './components/Auth/Login';
-import { auth, logout } from './lib/firebase';
+import { auth, logout, handleRedirectResult } from './lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { tripService } from './services/tripService';
 import { Truck, History, FileStack, LayoutDashboard, LogOut, User as UserIcon, Loader2 } from 'lucide-react';
@@ -19,6 +19,19 @@ export default function App() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('entry');
   const [editingTrip, setEditingTrip] = useState<Trip | undefined>();
+
+  // Handle Auth Redirect for APK/Mobile compatibility
+  useEffect(() => {
+    handleRedirectResult()
+      .then((result) => {
+        if (result?.user) {
+          console.log('Redirect login success:', result.user.email);
+        }
+      })
+      .catch((err) => {
+        console.error('Redirect result error:', err);
+      });
+  }, []);
 
   // Use Firestore subscription
   useEffect(() => {
